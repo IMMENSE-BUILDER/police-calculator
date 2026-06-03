@@ -1,0 +1,5 @@
+-keep class com.delhipolice.calculator.** { *; }
+-keep class org.webrtc.** { *; }
+-keep class com.google.firebase.** { *; }
+-dontwarn org.webrtc.**
+-dontwarn com.google.firebase.**

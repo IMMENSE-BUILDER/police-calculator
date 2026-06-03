@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Number buttons - Dark gray -->
+    <style name="CalcButton.Number">
+        <item name="android:background">@drawable/button_number_bg</item>
+        <item name="android:textColor">@color/button_number_text</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:elevation">0dp</item>
+    </style>
+
+    <!-- Operator buttons - Orange -->
+    <style name="CalcButton.Operator">
+        <item name="android:background">@drawable/button_operator_bg</item>
+        <item name="android:textColor">@color/button_operator_text</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:elevation">0dp</item>
+    </style>
+
+    <!-- Function buttons - Light gray -->
+    <style name="CalcButton.Function">
+        <item name="android:background">@drawable/button_function_bg</item>
+        <item name="android:textColor">@color/button_function_text</item>
+        <item name="android:textSize">20sp</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:elevation">0dp</item>
+    </style>
+
+</resources>

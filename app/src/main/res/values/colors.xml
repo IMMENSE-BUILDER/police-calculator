@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Calculator Colors - Standard Material Design -->
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="display_background">#FF1C1C1C</color>
+    <color name="button_number">#FF2D2D2D</color>
+    <color name="button_number_text">#FFFFFFFF</color>
+    <color name="button_operator">#FFFF9500</color>
+    <color name="button_operator_text">#FFFFFFFF</color>
+    <color name="button_function">#FFA5A5A5</color>
+    <color name="button_function_text">#FF000000</color>
+    <color name="background">#FF000000</color>
+
+    <!-- Transparent for stealth -->
+    <color name="transparent">#00000000</color>
+</resources>
