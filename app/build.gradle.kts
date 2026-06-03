@@ -45,8 +45,8 @@ dependencies {
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-database-ktx")
 
-    // WebRTC - LiveKit maintained fork (actively updated, reliable)
-    implementation("io.livekit:livekit-webrtc:2.5.2")
+    // LiveKit WebRTC (includes full WebRTC stack)
+    implementation("io.livekit:livekit-android:2.25.3")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
