@@ -28,29 +28,10 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
-    - name: Build Debug APK with full output
-      run: ./gradlew assembleDebug --stacktrace --info > build_log.txt 2>&1; echo "EXIT_CODE=$?"; tail -100 build_log.txt
-      continue-on-error: true
-
-    - name: Check for errors
-      if: always()
-      run: |
-        echo "=== Build log tail ==="
-        tail -50 build_log.txt || true
-        echo "=== Looking for compilation errors ==="
-        grep -i "error:" build_log.txt || echo "No compilation errors found"
-        echo "=== Looking for dependency errors ==="
-        grep -i "Could not resolve" build_log.txt || echo "No dependency resolution errors found"
-
-    - name: Upload Build Log
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-log
-        path: build_log.txt
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug
 
     - name: Upload Debug APK
-      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: calculator-debug
