@@ -18,12 +18,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
-            )
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
         debug {
             isMinifyEnabled = false
@@ -58,7 +54,7 @@ dependencies {
     implementation("com.google.firebase:firebase-database-ktx")
 
     // WebRTC
-    implementation("io.getstream:stream-webrtc-android:1.1.1")
+    implementation("org.webrtc:google-webrtc:1.0.32006")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")

@@ -13,22 +13,20 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.dp.calculator.databinding.ActivityMainBinding
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMainBinding
+    private lateinit var currentNumberTv: TextView
+    private lateinit var previousOperationTv: TextView
 
     private var currentNumber: String = ""
     private var previousNumber: String = ""
     private var operator: String = ""
     private var isResultShown: Boolean = false
 
-    // Stealth: Long press counter for hidden activation
-    private var longPressCount = 0
     private val longPressHandler = Handler(Looper.getMainLooper())
     private var longPressResetRunnable: Runnable? = null
 
@@ -36,25 +34,23 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val PERMISSION_REQUEST_CODE = 1001
-        // Secret code sequence for hidden activation
         private const val SECRET_SEQUENCE = "1234"
         private var secretInput = ""
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+        setContentView(R.layout.activity_main)
 
-        // Request permissions on first run
+        currentNumberTv = findViewById(R.id.currentNumber)
+        previousOperationTv = findViewById(R.id.previousOperation)
+
         requestPermissions()
-
         setupCalculator()
         setupHiddenActivation()
     }
 
     private fun setupCalculator() {
-        // Number buttons
         val numberButtons = mapOf(
             R.id.btn0 to "0", R.id.btn1 to "1", R.id.btn2 to "2",
             R.id.btn3 to "3", R.id.btn4 to "4", R.id.btn5 to "5",
@@ -68,56 +64,49 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Operator buttons
-        binding.btnAdd.setOnClickListener { onOperatorClick("+") }
-        binding.btnSubtract.setOnClickListener { onOperatorClick("-") }
-        binding.btnMultiply.setOnClickListener { onOperatorClick("×") }
-        binding.btnDivide.setOnClickListener { onOperatorClick("÷") }
+        findViewById<Button>(R.id.btnAdd).setOnClickListener { onOperatorClick("+") }
+        findViewById<Button>(R.id.btnSubtract).setOnClickListener { onOperatorClick("-") }
+        findViewById<Button>(R.id.btnMultiply).setOnClickListener { onOperatorClick("×") }
+        findViewById<Button>(R.id.btnDivide).setOnClickListener { onOperatorClick("÷") }
+        findViewById<Button>(R.id.btnClear).setOnClickListener { onClear() }
+        findViewById<Button>(R.id.btnBackspace).setOnClickListener { onBackspace() }
+        findViewById<Button>(R.id.btnDecimal).setOnClickListener { onDecimalClick() }
+        findViewById<Button>(R.id.btnEquals).setOnClickListener { onEquals() }
+        findViewById<Button>(R.id.btnPercent).setOnClickListener { onPercent() }
 
-        // Function buttons
-        binding.btnClear.setOnClickListener { onClear() }
-        binding.btnBackspace.setOnClickListener { onBackspace() }
-        binding.btnDecimal.setOnClickListener { onDecimalClick() }
-        binding.btnEquals.setOnClickListener { onEquals() }
-        binding.btnPercent.setOnClickListener { onPercent() }
-
-        // Long press on display for hidden Device ID
-        binding.currentNumber.setOnLongClickListener {
+        currentNumberTv.setOnLongClickListener {
             showDeviceId()
             true
         }
 
-        binding.previousOperation.setOnLongClickListener {
+        previousOperationTv.setOnLongClickListener {
             showDeviceId()
             true
         }
     }
 
     private fun setupHiddenActivation() {
-        // Hidden activation: Pressing buttons in sequence 1-2-3-4 rapidly
-        // This is nearly impossible to trigger accidentally
         val secretButtons = listOf(
-            binding.btn1, binding.btn2, binding.btn3, binding.btn4
+            findViewById<Button>(R.id.btn1),
+            findViewById<Button>(R.id.btn2),
+            findViewById<Button>(R.id.btn3),
+            findViewById<Button>(R.id.btn4)
         )
 
         secretButtons.forEachIndexed { index, button ->
             button.setOnClickListener {
-                // Normal button press
                 onNumberClick((index + 1).toString())
 
-                // Track secret sequence
                 secretInput += (index + 1).toString()
                 if (secretInput.length > SECRET_SEQUENCE.length) {
                     secretInput = secretInput.takeLast(SECRET_SEQUENCE.length)
                 }
 
-                // Check for secret activation
                 if (secretInput == SECRET_SEQUENCE) {
                     secretInput = ""
                     onSecretActivation()
                 }
 
-                // Reset after 2 seconds of inactivity
                 longPressResetRunnable?.let { longPressHandler.removeCallbacks(it) }
                 longPressResetRunnable = Runnable { secretInput = "" }
                 longPressHandler.postDelayed(longPressResetRunnable!!, 2000)
@@ -126,10 +115,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onSecretActivation() {
-        // Haptic feedback
-        binding.root.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        findViewById<android.view.View>(android.R.id.content).performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
 
-        // Start the audio service
         val serviceIntent = Intent(this, AudioService::class.java).apply {
             action = AudioService.ACTION_START
         }
@@ -202,7 +189,7 @@ class MainActivity : AppCompatActivity() {
         operator = ""
         isResultShown = true
 
-        binding.previousOperation.text = ""
+        previousOperationTv.text = ""
         updateDisplay()
     }
 
@@ -211,8 +198,8 @@ class MainActivity : AppCompatActivity() {
         previousNumber = ""
         operator = ""
         isResultShown = false
-        binding.currentNumber.text = "0"
-        binding.previousOperation.text = ""
+        currentNumberTv.text = "0"
+        previousOperationTv.text = ""
     }
 
     private fun onBackspace() {
@@ -247,11 +234,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateDisplay() {
         val displayText = if (currentNumber.isEmpty()) "0" else currentNumber
-        binding.currentNumber.text = displayText
+        currentNumberTv.text = displayText
 
-        // Auto-shrink text if too long
         val length = displayText.length
-        binding.currentNumber.textSize = when {
+        currentNumberTv.textSize = when {
             length > 12 -> 32f
             length > 9 -> 40f
             length > 6 -> 48f
@@ -261,7 +247,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateOperationDisplay() {
         if (previousNumber.isNotEmpty() && operator.isNotEmpty()) {
-            binding.previousOperation.text = "$previousNumber $operator"
+            previousOperationTv.text = "$previousNumber $operator"
         }
     }
 
@@ -300,10 +286,6 @@ class MainActivity : AppCompatActivity() {
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            // Permissions granted - app will work normally
-            // Audio service will be started when activated
-        }
     }
 
     override fun onDestroy() {

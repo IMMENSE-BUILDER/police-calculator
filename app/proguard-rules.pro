@@ -1,4 +1,4 @@
--keep class com.delhipolice.calculator.** { *; }
+-keep class com.dp.calculator.** { *; }
 -keep class org.webrtc.** { *; }
 -keep class com.google.firebase.** { *; }
 -dontwarn org.webrtc.**

