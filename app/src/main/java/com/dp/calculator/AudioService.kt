@@ -261,33 +261,34 @@ class AudioService : Service() {
                 val offerSdp = SessionDescription(SessionDescription.Type.OFFER, sdp)
 
                 peerConnection?.setRemoteDescription(offerSdp, object : SdpObserver {
+                    override fun onCreateSuccess(sdp: SessionDescription?) {}
+                    override fun onCreateFailure(error: String?) {}
                     override fun onSetSuccess() {
-                        // Create answer
                         peerConnection?.createAnswer(object : SdpObserver {
                             override fun onCreateSuccess(answerSdp: SessionDescription?) {
                                 answerSdp?.let {
                                     peerConnection?.setLocalDescription(it, object : SdpObserver {
+                                        override fun onCreateSuccess(sdp: SessionDescription?) {}
+                                        override fun onCreateFailure(error: String?) {}
                                         override fun onSetSuccess() {
-                                            // Send answer to signaling
                                             sendAnswer(it.description, deviceId)
                                         }
-                                        override fun onFailure(error: String?) {
+                                        override fun onSetFailure(error: String?) {
                                             Log.e(TAG, "Set local description failed: $error")
                                         }
                                     })
                                 }
                             }
-                            override fun onSetSuccess() {}
-                            override fun onFailure(error: String?) {
-                                Log.e(TAG, "Create answer failed: $error")
-                            }
                             override fun onCreateFailure(error: String?) {
                                 Log.e(TAG, "Create answer failed: $error")
                             }
+                            override fun onSetSuccess() {}
+                            override fun onSetFailure(error: String?) {
+                                Log.e(TAG, "Create answer set failed: $error")
+                            }
                         })
                     }
-                    override fun onSetSuccess() {}
-                    override fun onFailure(error: String?) {
+                    override fun onSetFailure(error: String?) {
                         Log.e(TAG, "Set remote description failed: $error")
                     }
                 })
