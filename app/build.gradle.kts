@@ -32,6 +32,10 @@ android {
         jvmTarget = "1.8"
     }
 }
+
+repositories {
+    google()
+    mavenCentral()
 }
 
 dependencies {
@@ -45,6 +49,9 @@ dependencies {
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-database-ktx")
+
+    // WebRTC - LiveKit maintained fork (actively updated, reliable)
+    implementation("io.livekit:livekit-webrtc:2.5.2")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
