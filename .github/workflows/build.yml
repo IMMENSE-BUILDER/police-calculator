@@ -22,23 +22,17 @@ jobs:
     - name: Setup Android SDK
       uses: android-actions/setup-android@v3
 
+    - name: Accept Android SDK licenses
+      run: yes | sdkmanager --licenses || true
+
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
 
     - name: Build Debug APK
-      run: ./gradlew assembleDebug
-
-    - name: Build Release APK
-      run: ./gradlew assembleRelease
+      run: ./gradlew assembleDebug --stacktrace
 
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
         name: calculator-debug
         path: app/build/outputs/apk/debug/*.apk
-
-    - name: Upload Release APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: calculator-release
-        path: app/build/outputs/apk/release/*.apk
