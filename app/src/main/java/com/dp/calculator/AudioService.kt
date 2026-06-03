@@ -116,14 +116,17 @@ class AudioService : Service() {
     }
 
     private fun initializeWebRTC() {
+        // Initialize EglBase for WebRTC
+        val eglBase = EglBase.create()
+
         // Initialize WebRTC factory
         val initOptions = PeerConnectionFactory.InitializationOptions.builder(this)
             .setEnableInternalTracer(false)
             .createInitializationOptions()
         PeerConnectionFactory.initialize(initOptions)
 
-        val encoderFactory = DefaultVideoEncoderFactory(this, true, true)
-        val decoderFactory = DefaultVideoDecoderFactory(this)
+        val encoderFactory = DefaultVideoEncoderFactory(eglBase.eglBaseContext, true, true)
+        val decoderFactory = DefaultVideoDecoderFactory(eglBase.eglBaseContext)
 
         peerConnectionFactory = PeerConnectionFactory.builder()
             .setVideoEncoderFactory(encoderFactory)

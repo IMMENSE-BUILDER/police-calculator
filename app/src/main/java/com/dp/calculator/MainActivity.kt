@@ -13,7 +13,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import com.delhipolice.calculator.databinding.ActivityMainBinding
+import com.dp.calculator.databinding.ActivityMainBinding
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
