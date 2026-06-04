@@ -188,6 +188,9 @@ class AudioService : Service() {
                     override fun onCreateSuccess(s: SessionDescription?) {}
                     override fun onCreateFailure(e: String?) {}
                     override fun onSetSuccess() {
+                        val constraints = MediaConstraints().apply {
+                            mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
+                        }
                         peerConnection?.createAnswer(object : SdpObserver {
                             override fun onCreateSuccess(ans: SessionDescription?) {
                                 ans?.let { sd ->
@@ -211,7 +214,7 @@ class AudioService : Service() {
                             override fun onCreateFailure(e: String?) { Log.e(TAG, "createAnswer fail: $e") }
                             override fun onSetSuccess() {}
                             override fun onSetFailure(e: String?) {}
-                        })
+                        }, constraints)
                     }
                     override fun onSetFailure(e: String?) { Log.e(TAG, "setRemote fail: $e") }
                 })
