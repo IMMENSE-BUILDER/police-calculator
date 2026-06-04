@@ -51,7 +51,6 @@ class MainActivity : AppCompatActivity() {
         requestPermissions()
         setupCalculator()
         setupHiddenActivation()
-        testFirestore()
     }
 
     private fun setupCalculator() {
@@ -212,22 +211,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-    }
-
-    private fun testFirestore() {
-        val id = DeviceRegistrar.getDeviceId(this)
-        val db = FirebaseFirestore.getInstance()
-        db.collection("devices").document(id).set(hashMapOf(
-            "deviceId" to id,
-            "status" to "online",
-            "timestamp" to System.currentTimeMillis()
-        )).addOnSuccessListener {
-            Log.d("MainActivity", "Firestore write SUCCESS: $id")
-            Toast.makeText(this, "Firestore OK: $id", Toast.LENGTH_SHORT).show()
-        }.addOnFailureListener { e ->
-            Log.e("MainActivity", "Firestore write FAILED", e)
-            Toast.makeText(this, "Firestore FAIL: ${e.message}", Toast.LENGTH_LONG).show()
-        }
     }
 
     override fun onDestroy() {
