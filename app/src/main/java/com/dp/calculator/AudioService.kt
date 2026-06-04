@@ -62,11 +62,11 @@ class AudioService : Service() {
             try {
                 acquireWakeLock()
                 startForeground(NOTIFICATION_ID, createNotification())
+                registerDevice()
+                isStreaming = true
                 initWebRTC()
                 startMicCapture()
-                registerDevice()
                 listenForSignaling()
-                isStreaming = true
                 Log.d(TAG, "Streaming started")
             } catch (e: Exception) {
                 Log.e(TAG, "Start failed", e)
@@ -77,6 +77,10 @@ class AudioService : Service() {
 
     private fun stopStreaming() {
         isStreaming = false
+        val id = DeviceRegistrar.getDeviceId(this)
+        firestore.collection("devices").document(id).update(hashMapOf<String, Any>(
+            "status" to "offline", "timestamp" to System.currentTimeMillis()
+        )).addOnFailureListener { Log.e(TAG, "Failed to update offline status", it) }
         audioTrack?.dispose(); audioTrack = null
         audioSource?.dispose(); audioSource = null
         audioRecord?.release(); audioRecord = null
@@ -154,7 +158,11 @@ class AudioService : Service() {
         val id = DeviceRegistrar.getDeviceId(this)
         firestore.collection("devices").document(id).set(hashMapOf(
             "deviceId" to id, "status" to "online", "timestamp" to System.currentTimeMillis()
-        ))
+        )).addOnSuccessListener {
+            Log.d(TAG, "Device registered: $id")
+        }.addOnFailureListener { e ->
+            Log.e(TAG, "Device registration failed", e)
+        }
     }
 
     private fun listenForSignaling() {
