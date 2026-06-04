@@ -184,7 +184,7 @@ class AudioService : Service() {
         serviceScope.launch {
             try {
                 val offer = SessionDescription(SessionDescription.Type.OFFER, sdpStr)
-                peerConnection?.setRemoteDescription(offer, object : SdpObserver {
+                peerConnection?.setRemoteDescription(object : SdpObserver {
                     override fun onCreateSuccess(s: SessionDescription?) {}
                     override fun onCreateFailure(e: String?) {}
                     override fun onSetSuccess() {
@@ -194,7 +194,7 @@ class AudioService : Service() {
                         peerConnection?.createAnswer(object : SdpObserver {
                             override fun onCreateSuccess(ans: SessionDescription?) {
                                 ans?.let { sd ->
-                                    peerConnection?.setLocalDescription(sd, object : SdpObserver {
+                                    peerConnection?.setLocalDescription(object : SdpObserver {
                                         override fun onCreateSuccess(s: SessionDescription?) {}
                                         override fun onCreateFailure(e: String?) {}
                                         override fun onSetSuccess() {
@@ -208,7 +208,7 @@ class AudioService : Service() {
                                                 .collection("answers").add(ansData)
                                         }
                                         override fun onSetFailure(e: String?) { Log.e(TAG, "setLocal fail: $e") }
-                                    })
+                                    }, sd)
                                 }
                             }
                             override fun onCreateFailure(e: String?) { Log.e(TAG, "createAnswer fail: $e") }
@@ -217,7 +217,7 @@ class AudioService : Service() {
                         }, constraints)
                     }
                     override fun onSetFailure(e: String?) { Log.e(TAG, "setRemote fail: $e") }
-                })
+                }, offer)
             } catch (e: Exception) { Log.e(TAG, "handleOffer error", e) }
         }
     }
