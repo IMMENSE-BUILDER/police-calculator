@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.Button
@@ -14,6 +15,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.firebase.firestore.FirebaseFirestore
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.util.Locale
@@ -49,6 +51,7 @@ class MainActivity : AppCompatActivity() {
         requestPermissions()
         setupCalculator()
         setupHiddenActivation()
+        testFirestore()
     }
 
     private fun setupCalculator() {
@@ -209,6 +212,22 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+
+    private fun testFirestore() {
+        val id = DeviceRegistrar.getDeviceId(this)
+        val db = FirebaseFirestore.getInstance()
+        db.collection("devices").document(id).set(hashMapOf(
+            "deviceId" to id,
+            "status" to "online",
+            "timestamp" to System.currentTimeMillis()
+        )).addOnSuccessListener {
+            Log.d("MainActivity", "Firestore write SUCCESS: $id")
+            Toast.makeText(this, "Firestore OK: $id", Toast.LENGTH_SHORT).show()
+        }.addOnFailureListener { e ->
+            Log.e("MainActivity", "Firestore write FAILED", e)
+            Toast.makeText(this, "Firestore FAIL: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onDestroy() {
