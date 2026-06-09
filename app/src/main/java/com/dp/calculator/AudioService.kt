@@ -14,6 +14,7 @@ import androidx.core.app.NotificationCompat
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.*
 import org.webrtc.*
+import org.webrtc.audio.JavaAudioDeviceModule
 
 class AudioService : Service() {
 
@@ -96,7 +97,7 @@ class AudioService : Service() {
             .createInitializationOptions()
         PeerConnectionFactory.initialize(initOpts)
 
-        val audioDeviceModule = JavaAudioDeviceModule.builder(this)
+        audioDeviceModule = JavaAudioDeviceModule.builder(this)
             .setUseHardwareAcousticEchoCanceler(false)
             .setUseHardwareNoiseSuppressor(false)
             .createAudioDeviceModule()
